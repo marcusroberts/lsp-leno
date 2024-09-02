@@ -56,23 +56,41 @@ const dataView = (mem:WebAssembly.Memory) => dv.buffer === mem.buffer ? dv : dv 
 let instance:WebAssembly.Instance;
 let wasm;
 
-const getlenses = (exports0:WebAssembly.Exports,memory0:WebAssembly.Memory) => {
-    const utf8Decoder = new TextDecoder();
+const utf8Decoder = new TextDecoder();
+const utf8Encoder = new TextEncoder();
+let utf8EncodedLen = 0;
 
-    const fn = exports0['leno:lsp/lenses#getlenses'] as () => number;
-	const ret = fn();
-    const len2 = dataView(memory0).getInt32(ret + 4, true);
-    const base2 = dataView(memory0).getInt32(ret + 0, true);
-    const result2 = [];
-    for (let i = 0; i < len2; i++) {
-      const base = base2 + i * 32;
-      const ptr0 = dataView(memory0).getInt32(base + 16, true);
-      const len0 = dataView(memory0).getInt32(base + 20, true);
-      const result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
-      const ptr1 = dataView(memory0).getInt32(base + 24, true);
-      const len1 = dataView(memory0).getInt32(base + 28, true);
+
+const utf8Encode = (s:string, realloc:any, memory:WebAssembly.Memory) => {
+	if (typeof s !== 'string') throw new TypeError('expected a string');
+	if (s.length === 0) {
+		utf8EncodedLen = 0;
+		return 1;
+	}
+	const buf = utf8Encoder.encode(s);
+	const ptr = realloc(0, 0, 1, buf.length);
+	new Uint8Array(memory.buffer).set(buf, ptr);
+	utf8EncodedLen = buf.length;
+	return ptr;
+};
+
+function getlenses(arg0:string,exports0:WebAssembly.Exports,memory0:WebAssembly.Memory,realloc0:WebAssembly.ExportValue) {
+    const ptr0 = utf8Encode(arg0, realloc0, memory0);
+    const len0 = utf8EncodedLen;
+    const fn = exports0['leno:lsp/lenses#getlenses'] as (arg0:number,arg1:number) => number;
+	const ret = fn(ptr0, len0);
+    const len3 = dataView(memory0).getInt32(ret + 4, true);
+    const base3 = dataView(memory0).getInt32(ret + 0, true);
+    const result3 = [];
+    for (let i = 0; i < len3; i++) {
+      const base = base3 + i * 32;
+      const ptr1 = dataView(memory0).getInt32(base + 16, true);
+      const len1 = dataView(memory0).getInt32(base + 20, true);
       const result1 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr1, len1));
-      result2.push({
+      const ptr2 = dataView(memory0).getInt32(base + 24, true);
+      const len2 = dataView(memory0).getInt32(base + 28, true);
+      const result2 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr2, len2));
+      result3.push({
         range: {
           start: {
             line: dataView(memory0).getInt32(base + 0, true) >>> 0,
@@ -84,13 +102,49 @@ const getlenses = (exports0:WebAssembly.Exports,memory0:WebAssembly.Memory) => {
           },
         },
         command: {
-          title: result0,
-          command: result1,
+          title: result1,
+          command: result2,
         },
       });
     }
-    return result2;
-  };
+    return result3;
+  }
+
+//const getlenses = (exports0:WebAssembly.Exports,memory0:WebAssembly.Memory) => {
+//     const utf8Decoder = new TextDecoder();
+
+//     const fn = exports0['leno:lsp/lenses#getlenses'] as () => number;
+// 	const ret = fn();
+//     const len2 = dataView(memory0).getInt32(ret + 4, true);
+//     const base2 = dataView(memory0).getInt32(ret + 0, true);
+//     const result2 = [];
+//     for (let i = 0; i < len2; i++) {
+//       const base = base2 + i * 32;
+//       const ptr0 = dataView(memory0).getInt32(base + 16, true);
+//       const len0 = dataView(memory0).getInt32(base + 20, true);
+//       const result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
+//       const ptr1 = dataView(memory0).getInt32(base + 24, true);
+//       const len1 = dataView(memory0).getInt32(base + 28, true);
+//       const result1 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr1, len1));
+//       result2.push({
+//         range: {
+//           start: {
+//             line: dataView(memory0).getInt32(base + 0, true) >>> 0,
+//             character: dataView(memory0).getInt32(base + 4, true) >>> 0,
+//           },
+//           end: {
+//             line: dataView(memory0).getInt32(base + 8, true) >>> 0,
+//             character: dataView(memory0).getInt32(base + 12, true) >>> 0,
+//           },
+//         },
+//         command: {
+//           title: result0,
+//           command: result1,
+//         },
+//       });
+//     }
+//     return result2;
+//   };
 
 connection.onInitialize(async (params: InitializeParams) => {
 	const capabilities = params.capabilities;
@@ -213,10 +267,26 @@ documents.onDidClose(e => {
 connection.onCodeLens((params) => {
 	console.log("onCodeLens",params);
 
-	const { memory } = instance.exports;
+	const document = documents.get(params.textDocument.uri);
 
-    const result0 = getlenses(instance.exports, memory as WebAssembly.Memory);
+	if (document !== undefined) {
+
+
+		console.log("document",document);
+
+
+	const { memory } = instance.exports;
+	const realloc = instance.exports.cabi_realloc;
+
+	const text = document.getText();
+
+	console.log("text",text);
+
+    const result0 = getlenses(text,instance.exports, memory as WebAssembly.Memory, realloc);
 	return result0;
+	} else {
+		return [];
+	}
 	// return [
 	// 	{
 	// 		range: Range.create(0,0,0,10),
