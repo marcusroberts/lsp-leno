@@ -397,13 +397,10 @@ connection.onDocumentFormatting(params => {
 		const { memory } = instance.exports;
 		const realloc = instance.exports.cabi_realloc;
 
-
-
 		const result0 = format(text,instance.exports, memory as WebAssembly.Memory, realloc);
 		
-		
-		const	editRange : Range = Range.create(Position.create(0, 0), document.positionAt(document.getText().length));
-		return [TextEdit.replace(editRange, text)];
+		const editRange : Range = Range.create(Position.create(0, 0), document.positionAt(document.getText().length));
+		return [TextEdit.replace(editRange, result0)];
 
 	} 
 
