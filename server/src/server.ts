@@ -110,41 +110,18 @@ function getlenses(arg0:string,exports0:WebAssembly.Exports,memory0:WebAssembly.
     return result3;
   }
 
-//const getlenses = (exports0:WebAssembly.Exports,memory0:WebAssembly.Memory) => {
-//     const utf8Decoder = new TextDecoder();
+  function format(arg0:string,exports0:WebAssembly.Exports,memory0:WebAssembly.Memory,realloc0:WebAssembly.ExportValue) {
+	const ptr0 = utf8Encode(arg0, realloc0, memory0);
+	const len0 = utf8EncodedLen;
+//	const ret = exports0['leno:lsp/lenses#format'](ptr0, len0);
 
-//     const fn = exports0['leno:lsp/lenses#getlenses'] as () => number;
-// 	const ret = fn();
-//     const len2 = dataView(memory0).getInt32(ret + 4, true);
-//     const base2 = dataView(memory0).getInt32(ret + 0, true);
-//     const result2 = [];
-//     for (let i = 0; i < len2; i++) {
-//       const base = base2 + i * 32;
-//       const ptr0 = dataView(memory0).getInt32(base + 16, true);
-//       const len0 = dataView(memory0).getInt32(base + 20, true);
-//       const result0 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr0, len0));
-//       const ptr1 = dataView(memory0).getInt32(base + 24, true);
-//       const len1 = dataView(memory0).getInt32(base + 28, true);
-//       const result1 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr1, len1));
-//       result2.push({
-//         range: {
-//           start: {
-//             line: dataView(memory0).getInt32(base + 0, true) >>> 0,
-//             character: dataView(memory0).getInt32(base + 4, true) >>> 0,
-//           },
-//           end: {
-//             line: dataView(memory0).getInt32(base + 8, true) >>> 0,
-//             character: dataView(memory0).getInt32(base + 12, true) >>> 0,
-//           },
-//         },
-//         command: {
-//           title: result0,
-//           command: result1,
-//         },
-//       });
-//     }
-//     return result2;
-//   };
+	const fn = exports0['leno:lsp/lenses#format'] as (arg0:number,arg1:number) => number;
+	const ret = fn(ptr0, len0);
+	const ptr1 = dataView(memory0).getInt32(ret + 0, true);
+	const len1 = dataView(memory0).getInt32(ret + 4, true);
+	const result1 = utf8Decoder.decode(new Uint8Array(memory0.buffer, ptr1, len1));
+	return result1;
+  }
 
 connection.onInitialize(async (params: InitializeParams) => {
 	const capabilities = params.capabilities;
@@ -152,7 +129,7 @@ connection.onInitialize(async (params: InitializeParams) => {
 	console.log("@@@@ cwd",process.cwd());
 
 	wasm = await WebAssembly.compile(
-		await readFile('/Users/marcus/Projects/lsp-leno/server/lsp.gr.wasm') 
+		await readFile('/Users/marcus/Projects/lsp-leno/server/lenolsp.gr.wasm') 
 	);
 
 	const importObject = { wasi_snapshot_preview1: wasi.wasiImport };
@@ -287,22 +264,7 @@ connection.onCodeLens((params) => {
 	} else {
 		return [];
 	}
-	// return [
-	// 	{
-	// 		range: Range.create(0,0,0,10),
-	// 		command: {
-	// 			title: "Line 1 lens",
-	// 			command: ""
-	// 		}
-	// 	}
-	// 	,{
-	// 		range: Range.create(1,0,1,10),
-	// 		command: {
-	// 			title: "Line 2 lens",
-	// 			command: ""
-	// 		}
-	// 	}
-	// ];
+	
 });
 
 connection.onCodeLensResolve((codeLens) => {
@@ -311,11 +273,7 @@ connection.onCodeLensResolve((codeLens) => {
 	return codeLens;
 });
 
-connection.onDocumentFormatting((params) => {
-	return [
-		//TextEdit.insert(Position.create(1,0), 'A new line\n')
-	];
-});
+
 
 connection.languages.diagnostics.on(async (params) => {
 	const document = documents.get(params.textDocument.uri);
@@ -426,6 +384,32 @@ connection.onCompletionResolve(
 		return item;
 	}
 );
+
+connection.onDocumentFormatting(params => {
+	console.log("formatting",params);
+	const document = documents.get(params.textDocument.uri);
+
+	if (document !== undefined) {
+
+		const text = document.getText();
+		console.log("document to format",text);
+
+		const { memory } = instance.exports;
+		const realloc = instance.exports.cabi_realloc;
+
+
+
+		const result0 = format(text,instance.exports, memory as WebAssembly.Memory, realloc);
+		
+		
+		const	editRange : Range = Range.create(Position.create(0, 0), document.positionAt(document.getText().length));
+		return [TextEdit.replace(editRange, text)];
+
+	} 
+
+	return undefined;
+
+});
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events
